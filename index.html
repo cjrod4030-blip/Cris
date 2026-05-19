@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hours & Pay Tracker</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: #f4f6fa;
+    color: #1f2937;
+  }
+  .container { max-width: 880px; margin: 0 auto; }
+  h1 { margin: 0 0 6px; font-size: 26px; }
+  .subtitle { color: #6b7280; margin-bottom: 24px; }
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    margin-bottom: 20px;
+  }
+  .week-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .week-nav { display: flex; gap: 8px; align-items: center; }
+  button {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #e5e7eb; color: #1f2937; }
+  button.secondary:hover { background: #d1d5db; }
+  button.danger { background: #ef4444; }
+  button.danger:hover { background: #dc2626; }
+  button.icon {
+    background: transparent;
+    color: #6b7280;
+    padding: 4px 8px;
+    font-size: 18px;
+  }
+  button.icon:hover { background: #f3f4f6; color: #ef4444; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td {
+    text-align: left;
+    padding: 10px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  th { font-size: 13px; color: #6b7280; font-weight: 600; text-transform: uppercase; }
+  td input[type="number"] {
+    width: 90px;
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  td input[type="number"]:focus { outline: 2px solid #2563eb; border-color: #2563eb; }
+  .total-row { font-weight: 600; background: #f9fafb; }
+  .total-row td { border-bottom: none; padding-top: 14px; }
+  .rates-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .rate-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 14px;
+  }
+  .rate-chip input {
+    width: 70px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    padding: 2px;
+  }
+  .rate-chip input:focus { outline: none; }
+  .rate-chip button { background: transparent; color: #6366f1; padding: 0 2px; font-size: 16px; }
+  .rate-chip button:hover { color: #ef4444; background: transparent; }
+  .add-rate {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .add-rate input {
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    width: 120px;
+  }
+  .pay-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .pay-card {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    padding: 14px;
+    border-radius: 10px;
+  }
+  .pay-card .rate { font-size: 13px; color: #15803d; font-weight: 600; }
+  .pay-card .amount { font-size: 22px; font-weight: 700; color: #14532d; margin-top: 4px; }
+  .week-label { font-size: 18px; font-weight: 600; }
+  .empty { color: #9ca3af; font-style: italic; padding: 8px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Hours & Pay Tracker</h1>
+  <p class="subtitle">Log daily hours, see your weekly total, and compare pay at different rates.</p>
+
+  <div class="card">
+    <div class="week-header">
+      <span class="week-label" id="weekLabel">Week of —</span>
+      <div class="week-nav">
+        <button class="secondary" id="prevWeek">&larr; Previous</button>
+        <button class="secondary" id="thisWeek">This week</button>
+        <button class="secondary" id="nextWeek">Next &rarr;</button>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Day</th><th>Date</th><th>Hours</th></tr>
+      </thead>
+      <tbody id="daysBody"></tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td>Weekly total</td>
+          <td></td>
+          <td id="weekTotal">0.00 hrs</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Hourly rates</h3>
+    <div class="rates-row" id="ratesRow"></div>
+    <div class="add-rate">
+      <input type="number" id="newRate" placeholder="e.g. 25" step="0.01" min="0" />
+      <button id="addRate">Add rate</button>
+    </div>
+
+    <h3>Pay this week</h3>
+    <div class="pay-grid" id="payGrid"></div>
+  </div>
+</div>
+
+<script>
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+const state = {
+  hours: JSON.parse(localStorage.getItem("hours") || "{}"),
+  rates: JSON.parse(localStorage.getItem("rates") || "[15, 20, 25]"),
+  weekStart: null,
+};
+
+function save() {
+  localStorage.setItem("hours", JSON.stringify(state.hours));
+  localStorage.setItem("rates", JSON.stringify(state.rates));
+}
+
+function startOfWeek(d) {
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  date.setDate(date.getDate() + diff);
+  return date;
+}
+
+function fmtDate(d) {
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function render() {
+  const start = state.weekStart;
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  document.getElementById("weekLabel").textContent =
+    `Week of ${fmtDate(start)} – ${fmtDate(end)}, ${end.getFullYear()}`;
+
+  const tbody = document.getElementById("daysBody");
+  tbody.innerHTML = "";
+  let total = 0;
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const key = isoDate(d);
+    const value = state.hours[key] ?? "";
+    if (value !== "") total += Number(value) || 0;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${DAYS[i]}</td>
+      <td>${fmtDate(d)}</td>
+      <td><input type="number" step="0.25" min="0" max="24" data-date="${key}" value="${value}" placeholder="0" /></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById("weekTotal").textContent = `${total.toFixed(2)} hrs`;
+
+  tbody.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", e => {
+      const k = e.target.dataset.date;
+      const v = e.target.value;
+      if (v === "") delete state.hours[k];
+      else state.hours[k] = Number(v);
+      save();
+      render();
+    });
+  });
+
+  renderRates();
+  renderPay(total);
+}
+
+function renderRates() {
+  const row = document.getElementById("ratesRow");
+  row.innerHTML = "";
+  if (state.rates.length === 0) {
+    row.innerHTML = '<span class="empty">No rates yet — add one below.</span>';
+    return;
+  }
+  state.rates.forEach((rate, idx) => {
+    const chip = document.createElement("div");
+    chip.className = "rate-chip";
+    chip.innerHTML = `
+      $<input type="number" step="0.01" min="0" value="${rate}" data-idx="${idx}" />/hr
+      <button data-remove="${idx}" title="Remove">&times;</button>
+    `;
+    row.appendChild(chip);
+  });
+  row.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener("input", e => {
+      const i = Number(e.target.dataset.idx);
+      state.rates[i] = Number(e.target.value) || 0;
+      save();
+      const total = computeTotal();
+      renderPay(total);
+    });
+  });
+  row.querySelectorAll('button[data-remove]').forEach(btn => {
+    btn.addEventListener("click", e => {
+      const i = Number(e.target.dataset.remove);
+      state.rates.splice(i, 1);
+      save();
+      render();
+    });
+  });
+}
+
+function computeTotal() {
+  const start = state.weekStart;
+  let total = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    total += Number(state.hours[isoDate(d)] || 0);
+  }
+  return total;
+}
+
+function renderPay(total) {
+  const grid = document.getElementById("payGrid");
+  grid.innerHTML = "";
+  if (state.rates.length === 0) {
+    grid.innerHTML = '<span class="empty">Add a rate above to see pay estimates.</span>';
+    return;
+  }
+  state.rates.forEach(rate => {
+    const card = document.createElement("div");
+    card.className = "pay-card";
+    card.innerHTML = `
+      <div class="rate">$${Number(rate).toFixed(2)}/hr × ${total.toFixed(2)} hrs</div>
+      <div class="amount">$${(total * rate).toFixed(2)}</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById("prevWeek").addEventListener("click", () => {
+  state.weekStart.setDate(state.weekStart.getDate() - 7);
+  render();
+});
+document.getElementById("nextWeek").addEventListener("click", () => {
+  state.weekStart.setDate(state.weekStart.getDate() + 7);
+  render();
+});
+document.getElementById("thisWeek").addEventListener("click", () => {
+  state.weekStart = startOfWeek(new Date());
+  render();
+});
+document.getElementById("addRate").addEventListener("click", () => {
+  const input = document.getElementById("newRate");
+  const v = Number(input.value);
+  if (!v || v <= 0) return;
+  state.rates.push(v);
+  input.value = "";
+  save();
+  render();
+});
+document.getElementById("newRate").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("addRate").click();
+});
+
+state.weekStart = startOfWeek(new Date());
+render();
+</script>
+</body>
+</html>
