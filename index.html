@@ -128,6 +128,63 @@
   .pay-card .amount { font-size: 22px; font-weight: 700; color: #14532d; margin-top: 4px; }
   .week-label { font-size: 18px; font-weight: 600; }
   .empty { color: #9ca3af; font-style: italic; padding: 8px 0; }
+
+  .sync-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .sync-header h3 { margin: 0; }
+  .sync-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #6b7280;
+  }
+  .sync-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #9ca3af;
+  }
+  .sync-dot.live { background: #10b981; }
+  .sync-dot.error { background: #ef4444; }
+  .sync-dot.syncing { background: #f59e0b; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+  .sync-body { margin-top: 16px; display: none; }
+  .sync-body.open { display: block; }
+  .sync-body .row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .sync-body label { font-size: 13px; color: #374151; font-weight: 500; }
+  .sync-body input, .sync-body textarea {
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: inherit;
+    width: 100%;
+  }
+  .sync-body textarea {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    min-height: 110px;
+    resize: vertical;
+  }
+  .sync-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sync-msg { font-size: 13px; margin-top: 8px; }
+  .sync-msg.err { color: #b91c1c; }
+  .sync-msg.ok { color: #15803d; }
+  details.help { margin-top: 10px; font-size: 13px; color: #4b5563; }
+  details.help summary { cursor: pointer; color: #2563eb; }
+  details.help ol { padding-left: 20px; line-height: 1.6; }
+  details.help code {
+    background: #f3f4f6; padding: 1px 5px; border-radius: 4px;
+    font-size: 12px;
+  }
+  details.help pre {
+    background: #1f2937; color: #e5e7eb; padding: 10px;
+    border-radius: 6px; overflow-x: auto; font-size: 12px;
+  }
 </style>
 </head>
 <body>
@@ -171,9 +228,72 @@
     <h3>Pay this week</h3>
     <div class="pay-grid" id="payGrid"></div>
   </div>
+
+  <div class="card">
+    <div class="sync-header" id="syncToggle">
+      <h3>Cloud sync</h3>
+      <span class="sync-status">
+        <span class="sync-dot" id="syncDot"></span>
+        <span id="syncText">Not connected</span>
+      </span>
+    </div>
+    <div class="sync-body" id="syncBody">
+      <div class="row">
+        <label for="cfgInput">Firebase config (paste the object from your Firebase project)</label>
+        <textarea id="cfgInput" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "...", "appId": "..." }'></textarea>
+      </div>
+      <div class="row">
+        <label for="emailInput">Email</label>
+        <input type="email" id="emailInput" autocomplete="email" placeholder="you@example.com" />
+      </div>
+      <div class="row">
+        <label for="passInput">Password (use the same on both devices)</label>
+        <input type="password" id="passInput" autocomplete="current-password" placeholder="At least 6 characters" />
+      </div>
+      <div class="sync-actions">
+        <button id="signInBtn">Sign in</button>
+        <button class="secondary" id="signUpBtn">Create account</button>
+        <button class="danger" id="signOutBtn" style="display:none;">Sign out</button>
+      </div>
+      <div class="sync-msg" id="syncMsg"></div>
+
+      <details class="help">
+        <summary>How to set up Firebase (5 minutes, one time)</summary>
+        <ol>
+          <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a> and create a free project.</li>
+          <li>In the project, click the <code>&lt;/&gt;</code> Web icon to "Add an app". Name it anything, skip Hosting, and copy the <code>firebaseConfig</code> object it shows you.</li>
+          <li>Paste that object into the Firebase config box above.</li>
+          <li>In the Firebase console: <strong>Build → Authentication → Get started → Email/Password → Enable → Save</strong>.</li>
+          <li>In the console: <strong>Build → Firestore Database → Create database → Start in production mode</strong>. Then go to the <strong>Rules</strong> tab and paste:
+            <pre>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         &amp;&amp; request.auth.uid == userId;
+    }
+  }
+}</pre>
+          and click Publish.</li>
+          <li>Back here, enter an email + password and click <strong>Create account</strong>. On your other device, paste the same config and click <strong>Sign in</strong> with the same email/password. Done — your hours will sync.</li>
+        </ol>
+      </details>
+    </div>
+  </div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+  setPersistence, browserLocalPersistence,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, doc, setDoc, onSnapshot,
+  enableIndexedDbPersistence,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 
 const state = {
@@ -182,9 +302,17 @@ const state = {
   weekStart: null,
 };
 
+const cloud = {
+  app: null, auth: null, db: null,
+  user: null, unsub: null,
+  applyingRemote: false,
+  writeTimer: null,
+};
+
 function save() {
   localStorage.setItem("hours", JSON.stringify(state.hours));
   localStorage.setItem("rates", JSON.stringify(state.rates));
+  scheduleCloudWrite();
 }
 
 function startOfWeek(d) {
@@ -243,7 +371,9 @@ function render() {
       if (v === "") delete state.hours[k];
       else state.hours[k] = Number(v);
       save();
-      render();
+      const t = computeTotal();
+      document.getElementById("weekTotal").textContent = `${t.toFixed(2)} hrs`;
+      renderPay(t);
     });
   });
 
@@ -347,6 +477,173 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
+}
+
+// --- Cloud sync ----------------------------------------------------------
+
+const syncToggle = document.getElementById("syncToggle");
+const syncBody = document.getElementById("syncBody");
+const syncDot = document.getElementById("syncDot");
+const syncText = document.getElementById("syncText");
+const syncMsg = document.getElementById("syncMsg");
+const cfgInput = document.getElementById("cfgInput");
+const emailInput = document.getElementById("emailInput");
+const passInput = document.getElementById("passInput");
+const signInBtn = document.getElementById("signInBtn");
+const signUpBtn = document.getElementById("signUpBtn");
+const signOutBtn = document.getElementById("signOutBtn");
+
+syncToggle.addEventListener("click", () => syncBody.classList.toggle("open"));
+
+function setStatus(kind, text) {
+  syncDot.className = "sync-dot" + (kind ? " " + kind : "");
+  syncText.textContent = text;
+}
+function setMsg(kind, text) {
+  syncMsg.className = "sync-msg" + (kind ? " " + kind : "");
+  syncMsg.textContent = text || "";
+}
+
+const savedCfg = localStorage.getItem("fbConfig");
+const savedEmail = localStorage.getItem("fbEmail");
+if (savedCfg) cfgInput.value = savedCfg;
+if (savedEmail) emailInput.value = savedEmail;
+
+function parseConfig() {
+  const raw = cfgInput.value.trim();
+  if (!raw) throw new Error("Paste your Firebase config first.");
+  let cfg;
+  try {
+    cfg = JSON.parse(raw);
+  } catch {
+    // Allow JS-object style (unquoted keys) by evaluating safely.
+    try { cfg = Function('"use strict"; return (' + raw + ')')(); }
+    catch { throw new Error("That config doesn't look like valid JSON."); }
+  }
+  if (!cfg.apiKey || !cfg.projectId) throw new Error("Config is missing apiKey or projectId.");
+  return cfg;
+}
+
+async function ensureApp() {
+  if (cloud.app) return;
+  const cfg = parseConfig();
+  cloud.app = initializeApp(cfg);
+  cloud.auth = getAuth(cloud.app);
+  await setPersistence(cloud.auth, browserLocalPersistence);
+  cloud.db = getFirestore(cloud.app);
+  try { await enableIndexedDbPersistence(cloud.db); } catch {}
+  localStorage.setItem("fbConfig", cfgInput.value.trim());
+
+  onAuthStateChanged(cloud.auth, user => {
+    cloud.user = user;
+    if (user) {
+      signOutBtn.style.display = "";
+      setStatus("syncing", `Signed in as ${user.email} — syncing…`);
+      subscribeRemote(user.uid);
+    } else {
+      signOutBtn.style.display = "none";
+      if (cloud.unsub) { cloud.unsub(); cloud.unsub = null; }
+      setStatus("", "Not signed in");
+    }
+  });
+}
+
+function mergeRemote(remote) {
+  if (!remote) return false;
+  let changed = false;
+  if (remote.hours && typeof remote.hours === "object") {
+    state.hours = remote.hours;
+    localStorage.setItem("hours", JSON.stringify(state.hours));
+    changed = true;
+  }
+  if (Array.isArray(remote.rates)) {
+    state.rates = remote.rates;
+    localStorage.setItem("rates", JSON.stringify(state.rates));
+    changed = true;
+  }
+  return changed;
+}
+
+function subscribeRemote(uid) {
+  if (cloud.unsub) cloud.unsub();
+  const ref = doc(cloud.db, "users", uid, "data", "tracker");
+  let firstSnapshot = true;
+  cloud.unsub = onSnapshot(ref, async snap => {
+    if (!snap.exists()) {
+      // First time on this account — upload whatever we have locally.
+      cloud.applyingRemote = true;
+      try {
+        await setDoc(ref, { hours: state.hours, rates: state.rates, updatedAt: Date.now() });
+        setStatus("live", "Synced");
+      } catch (e) { setStatus("error", "Sync error: " + e.message); }
+      cloud.applyingRemote = false;
+      firstSnapshot = false;
+      return;
+    }
+    const data = snap.data();
+    if (firstSnapshot) {
+      // On initial load: take remote as source of truth.
+      cloud.applyingRemote = true;
+      if (mergeRemote(data)) render();
+      cloud.applyingRemote = false;
+      firstSnapshot = false;
+    } else if (!snap.metadata.hasPendingWrites) {
+      // Update came from another device.
+      cloud.applyingRemote = true;
+      if (mergeRemote(data)) render();
+      cloud.applyingRemote = false;
+    }
+    setStatus("live", "Synced");
+  }, err => {
+    setStatus("error", "Sync error: " + err.message);
+  });
+}
+
+function scheduleCloudWrite() {
+  if (!cloud.user || !cloud.db || cloud.applyingRemote) return;
+  setStatus("syncing", "Saving…");
+  clearTimeout(cloud.writeTimer);
+  cloud.writeTimer = setTimeout(async () => {
+    try {
+      const ref = doc(cloud.db, "users", cloud.user.uid, "data", "tracker");
+      await setDoc(ref, { hours: state.hours, rates: state.rates, updatedAt: Date.now() });
+      setStatus("live", "Synced");
+    } catch (e) {
+      setStatus("error", "Sync error: " + e.message);
+    }
+  }, 600);
+}
+
+signInBtn.addEventListener("click", async () => {
+  setMsg("", "");
+  try {
+    await ensureApp();
+    localStorage.setItem("fbEmail", emailInput.value);
+    await signInWithEmailAndPassword(cloud.auth, emailInput.value, passInput.value);
+    setMsg("ok", "Signed in.");
+    passInput.value = "";
+  } catch (e) { setMsg("err", e.message); setStatus("error", "Sign-in failed"); }
+});
+
+signUpBtn.addEventListener("click", async () => {
+  setMsg("", "");
+  try {
+    await ensureApp();
+    localStorage.setItem("fbEmail", emailInput.value);
+    await createUserWithEmailAndPassword(cloud.auth, emailInput.value, passInput.value);
+    setMsg("ok", "Account created. Use the same email/password on your other device.");
+    passInput.value = "";
+  } catch (e) { setMsg("err", e.message); setStatus("error", "Sign-up failed"); }
+});
+
+signOutBtn.addEventListener("click", async () => {
+  try { await signOut(cloud.auth); setMsg("ok", "Signed out."); }
+  catch (e) { setMsg("err", e.message); }
+});
+
+// Auto-connect if config was previously saved.
+if (savedCfg) {
+  ensureApp().catch(e => setMsg("err", e.message));
 }
 </script>
 </body>

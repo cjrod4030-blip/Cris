@@ -1,4 +1,4 @@
-const CACHE = "hours-tracker-v1";
+const CACHE = "hours-tracker-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -24,6 +24,10 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  // Only handle our own static assets. Let Firebase / CDN requests pass
+  // through untouched so streaming connections aren't broken.
+  if (url.origin !== self.location.origin) return;
   e.respondWith(
     caches.match(e.request).then(hit =>
       hit || fetch(e.request).then(res => {
